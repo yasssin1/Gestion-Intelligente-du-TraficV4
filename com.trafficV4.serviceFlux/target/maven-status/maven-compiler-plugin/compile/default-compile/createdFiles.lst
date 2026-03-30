@@ -1,0 +1,10 @@
+baseDonnees\DBConnection.class
+kafka\KafkaProducerUtil.class
+flux\RouteThread.class
+flux\RouteData.class
+flux\RouteMap.class
+flux\ServiceFluxVehicules.class
+flux\SoapListener.class
+flux\ImpFluxVehicules.class
+baseDonnees\DBRoutes.class
+baseDonnees\DBRouteState.class

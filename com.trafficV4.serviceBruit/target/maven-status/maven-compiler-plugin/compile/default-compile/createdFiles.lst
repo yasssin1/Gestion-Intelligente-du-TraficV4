@@ -1,0 +1,10 @@
+baseDonnees\DBConnection.class
+bruit\ServiceBruit.class
+bruit\BruitMap.class
+kafka\KafkaProducerUtil.class
+kafka\KafkaRouteConsumer.class
+bruit\RestConfig.class
+baseDonnees\DBRoutes.class
+bruit\Bruit.class
+bruit\BruitListener.class
+baseDonnees\DBRouteState.class

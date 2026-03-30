@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart Traffic Dashboard</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f4f6f8;
+    margin: 20px;
+}
+
+h1 {
+    text-align: center;
+    color: #00467f;
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.tabs button {
+    padding: 10px 15px;
+    border: none;
+    cursor: pointer;
+    background: #00467f;
+    color: white;
+    border-radius: 6px;
+}
+
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+}
+
+th, td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #00467f;
+    color: white;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+.low { color: green; }
+.medium { color: orange; }
+.high { color: red; font-weight: bold; }
+
+input, button {
+    padding: 8px;
+    margin: 5px;
+}
+#alertsContainer div {
+    font-weight: bold;
+}
+#alertsHistory div {
+    font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Smart Traffic Dashboard</h1>
+
+<!-- TABS -->
+<div class="tabs">
+    <button onclick="showTab('traffic')">Traffic</button>
+    <button onclick="showTab('intersectionsTab')">Intersections</button>
+    
+    <button onclick="showTab('manage')">Manage Routes</button>
+    <button onclick="showTab('intersectionsManage')">Manage Intersections</button>
+    <button onclick="showTab('alerts')">Alerts</button>
+</div>
+
+<!-- TRAFFIC TAB -->
+<div id="traffic" class="section active">
+    <h2>Traffic</h2>
+
+    <table id="routesTable">
+        <thead>
+        <tr>
+            <th>Route</th>
+            <th>Vehicules</th>
+            <th>Pollution</th>
+            <th>Bruit</th>
+            <th>Status</th>
+            
+            <th>Last Update</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- MANAGE TAB -->
+<div id="manage" class="section">
+    <h2>Manage Routes</h2>
+
+    <input id="routeName" placeholder="Route name">
+
+    <br>
+
+    <button onclick="addRoute()">➕ Add Route</button>
+    <button onclick="deleteRoute()">❌ Delete Route</button>
+</div>
+
+<!-- INTERSECTIONS TAB -->
+<div id="intersectionsTab" class="section">
+    <h2>Intersections</h2>
+    <div id="intersections"></div>
+</div>
+<!-- intersection  management tab -->
+
+<div id="intersectionsManage" class="section">
+    <h2>Manage Intersections</h2>
+
+    <input id="route1" placeholder="Route 1">
+    <input id="route2" placeholder="Route 2">
+    <input id="intName" placeholder="Intersection Name">
+
+    <br>
+
+    <button onclick="addIntersection()">➕ Add Intersection</button>
+
+    <br><br>
+
+    <input id="intersectionName" placeholder="Intersection name (route1-route2)">
+    <button onclick="deleteIntersection()">❌ Delete Intersection</button>
+</div>
+
+<!--alerts tab-->
+<div id="alerts" class="section">
+    <h2>Alerts Actif </h2>
+    <div id="alertsContainer"></div>
+    <h2>Ajuster feux</h2>
+    <div id="adjustments"></div>
+
+    <h2>Historique</h2>
+    <div id="alertsHistory"></div>
+</div>
+<script>
+const ws = new WebSocket("ws://localhost:3000");
+let alertHistory = [];
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const routes = data.routes || {};
+
+    updateRoutes(routes);
+    updateIntersections(data.intersections || {});
+    updateAlerts(routes);
+    updateAdjustments(data.adjustments || []);
+};
+
+/* =======================
+   TAB SYSTEM
+======================= */
+function showTab(tab) {
+    document.querySelectorAll(".section").forEach(s => {
+        s.classList.remove("active");
+    });
+    document.getElementById(tab).classList.add("active");
+}
+
+/* =======================
+   ROUTES
+======================= */
+function getStatus(nb) {
+    if (nb < 30) return ["flux faible", "low"];
+    if (nb < 85) return ["flux moyen", "medium"];
+    return ["flux haut", "high"];
+}
+function updateRoutes(routes) {
+    const tbody = document.querySelector("#routesTable tbody");
+    tbody.innerHTML = "";
+
+    Object.keys(routes).forEach(route => {
+        const r = routes[route];
+        const [statusText, statusClass] = getStatus(r.nbVehicules);
+
+        const pollution = r.pollution;
+        const bruit = r.bruit;
+
+        let pollutionClass = "";
+        if (pollution !== "N/A") {
+            if (pollution < 30) pollutionClass = "low";
+            else if (pollution < 60) pollutionClass = "medium";
+            else pollutionClass = "high";
+        }
+
+        let bruitClass = "";
+        if (bruit != null) {
+            if (bruit < 30) bruitClass = "low";
+            else if (bruit < 70) bruitClass = "medium";
+            else bruitClass = "high";
+        }
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${route}</td>
+                <td>${r.nbVehicules}</td>
+                <td class="${pollutionClass}">
+                    ${pollution == null ? "—" : pollution}
+                </td>
+                <td class="${bruitClass}">
+                    ${bruit == null ? "—" : bruit}
+                </td>
+                <td class="${statusClass}">${statusText}</td>
+                <td>${r.timestamp}</td>
+            </tr>
+        `;
+    });
+}
+/* =======================
+   INTERSECTIONS
+======================= */
+
+function updateIntersections(intersections) {
+    const container = document.getElementById("intersections");
+
+    let html = "";
+
+    Object.keys(intersections).forEach(i => {
+        const inter = intersections[i];
+
+        html += `
+            <div style="padding:12px; margin:10px; background:white; border-radius:10px;">
+                <h3>${i}</h3>
+
+                <p>
+                    <span style="color:${inter.route1Red ? 'red' : 'green'}; font-weight:bold;">
+                        ${inter.route1}
+                    </span>
+
+                    <span style="margin:0 10px;">↔</span>
+
+                    <span style="color:${inter.route2Red ? 'red' : 'green'}; font-weight:bold;">
+                        ${inter.route2}
+                    </span>
+                </p>
+
+                <small>${inter.timestamp}</small>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+
+
+
+/* =======================
+   update alerts
+======================= */
+function updateAlerts(routes) {
+    const container = document.getElementById("alertsContainer");
+    const historyContainer = document.getElementById("alertsHistory");
+
+    let html = "";
+    let newAlerts = [];
+
+    Object.keys(routes).forEach(route => {
+        const r = routes[route];
+
+        let alerts = [];
+
+        if (r.pollution != null && r.pollution > 60) {
+            alerts.push("🌫 Pollution");
+        }
+
+        if (r.bruit != null && r.bruit > 70) {
+            alerts.push("🔊 Noise");
+        }
+
+        if (alerts.length) {
+            const alertText = `🚨 ${route} - ${alerts.join(" & ")}`;
+
+            // Active alerts UI
+            html += `
+                <div style="background:#ffe5e5; padding:10px; margin:10px; border-radius:8px;">
+                    ${alertText}
+                </div>
+            `;
+
+            newAlerts.push({
+                text: alertText,
+                time: new Date().toLocaleTimeString()
+            });
+        }
+    });
+
+    container.innerHTML = html || "<p>No alerts 🚀</p>";
+
+    // 🧠 Add to history (avoid duplicates spam)
+    newAlerts.forEach(a => {
+        const exists = alertHistory.find(h => h.text === a.text);
+        if (!exists) {
+            alertHistory.unshift(a); // add to top
+        }
+    });
+
+    // limit history size
+    if (alertHistory.length > 20) {
+        alertHistory = alertHistory.slice(0, 20);
+    }
+
+    // render history
+    let historyHTML = "";
+
+    alertHistory.forEach(h => {
+        historyHTML += `
+            <div style="background:#eef; padding:8px; margin:5px; border-radius:6px;">
+                ${h.time} - ${h.text}
+            </div>
+        `;
+    });
+
+    historyContainer.innerHTML = historyHTML;
+}
+
+function updateAdjustments(adjustments) {
+    const container = document.getElementById("adjustments");
+
+    let html = "";
+
+    adjustments.forEach(a => {
+        html += `
+            <div style="background:#e0f7fa; padding:8px; margin:5px; border-radius:6px;">
+                ${a.timestamp} - ${a.intersection} → Ajuster la durée feut vert ${a.route}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+
+/* =======================
+   ADMIN ACTIONS
+======================= */
+function addRoute() {
+    const name = document.getElementById("routeName").value;
+
+    fetch("http://localhost:8081/routes/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+    }).then(() => {
+        alert("Route added");
+    });
+}
+
+function deleteRoute() {
+    const name = document.getElementById("routeName").value;
+
+    fetch(`http://localhost:8081/routes/delete/${name}`, {
+        method: "DELETE"
+    }).then(() => {
+        alert("Route deleted");
+    });
+}
+
+function addIntersection() {
+    const route1 = document.getElementById("route1").value;
+    const route2 = document.getElementById("route2").value;
+    const name =  document.getElementById("intName").value;
+
+    fetch("http://localhost:8081/intersections/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ route1, route2, name })
+    }).then(() => {
+        alert("Intersection added");
+    });
+}
+function deleteIntersection() {
+    const name = document.getElementById("intersectionName").value;
+
+    fetch(`http://localhost:8081/intersections/delete/${name}`, {
+        method: "DELETE"
+    }).then(() => {
+        alert("Intersection deleted");
+    });
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+baseDonnees\DBConnection.class
+kafka\KafkaProducerUtil.class
+pollution\Pollution.class
+kafka\KafkaRouteConsumer.class
+pollution\ServicePollution.class
+pollution\PollutionMap.class
+pollution\RestConfig.class
+baseDonnees\DBRoutes.class
+pollution\PollutionListener.class
+baseDonnees\DBRouteState.class
